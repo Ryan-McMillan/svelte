@@ -44,6 +44,7 @@ export interface Writable<T> extends Readable<T> {
 type SubscribeInvalidateTuple<T> = [Subscriber<T>, Invalidator<T>];
 
 const subscriber_queue = [];
+let subscriber_queue_length = 0;
 
 /**
  * Creates a `Readable` store that allows reading by subscription.
@@ -64,22 +65,30 @@ export function readable<T>(value: T, start: StartStopNotifier<T>): Readable<T> 
 export function writable<T>(value: T, start: StartStopNotifier<T> = noop): Writable<T> {
 	let stop: Unsubscriber;
 	const subscribers: Array<SubscribeInvalidateTuple<T>> = [];
+	let subscribers_length = 0;
 
 	function set(new_value: T): void {
 		if (safe_not_equal(value, new_value)) {
 			value = new_value;
 			if (stop) { // store is ready
-				const run_queue = !subscriber_queue.length;
-				for (let i = 0; i < subscribers.length; i += 1) {
+				const run_queue = !subscriber_queue_length;
+
+				for (let i = 0; i < subscribers_length; i += 1) {
 					const s = subscribers[i];
 					s[1]();
-					subscriber_queue.push(s, value);
+
+					subscriber_queue[subscriber_queue_length] = s;
+					subscriber_queue_length += 1;
+					subscriber_queue[subscriber_queue_length] = value;
+					subscriber_queue_length += 1;
 				}
+
 				if (run_queue) {
-					for (let i = 0; i < subscriber_queue.length; i += 2) {
+					for (let i = 0; i < subscriber_queue_length; i += 2) {
 						subscriber_queue[i][0](subscriber_queue[i + 1]);
 					}
-					subscriber_queue.length = 0;
+
+					subscriber_queue_length = 0;
 				}
 			}
 		}
@@ -91,8 +100,9 @@ export function writable<T>(value: T, start: StartStopNotifier<T> = noop): Writa
 
 	function subscribe(run: Subscriber<T>, invalidate: Invalidator<T> = noop): Unsubscriber {
 		const subscriber: SubscribeInvalidateTuple<T> = [run, invalidate];
-		subscribers.push(subscriber);
-		if (subscribers.length === 1) {
+		subscribers[subscribers_length] = subscriber;
+        subscribers_length += 1;
+		if (subscribers_length === 1) {
 			stop = start(set) || noop;
 		}
 		run(value);
@@ -100,12 +110,14 @@ export function writable<T>(value: T, start: StartStopNotifier<T> = noop): Writa
 		return () => {
 			const index = subscribers.indexOf(subscriber);
 			if (index !== -1) {
-				subscribers.splice(index, 1);
-			}
-			if (subscribers.length === 0) {
-				stop();
-				stop = null;
-			}
+                subscribers[index] = subscribers[subscribers_length - 1];
+                subscribers[subscribers_length - 1] = null;
+                subscribers_length -= 1;
+            }
+            if (subscribers_length === 0) {
+                stop();
+                stop = null;
+            }
 		};
 	}
 

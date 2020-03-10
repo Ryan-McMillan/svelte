@@ -1,4 +1,4 @@
-import { add_render_callback, flush, schedule_update, dirty_components } from './scheduler';
+import { add_render_callback, flush, schedule_update, dirty_components, dirty_components_data } from './scheduler';
 import { current_component, set_current_component } from './lifecycle';
 import { blank_object, is_function, run, run_all, noop } from './utils';
 import { children } from './dom';
@@ -89,7 +89,8 @@ export function destroy_component(component, detaching) {
 
 function make_dirty(component, i) {
 	if (component.$$.dirty[0] === -1) {
-		dirty_components.push(component);
+		dirty_components[dirty_components_data.length] = component;
+		dirty_components_data.length += 1;
 		schedule_update();
 		component.$$.dirty.fill(0);
 	}
